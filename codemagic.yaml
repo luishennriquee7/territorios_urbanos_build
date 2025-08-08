@@ -1,0 +1,28 @@
+workflows:
+  android_release:
+    name: Build APK (OSM)
+    max_build_duration: 60
+    environment:
+      flutter: stable
+    scripts:
+      - name: Criar esqueleto Flutter
+        script: |
+          flutter --version
+          flutter create territorios_urbanos
+      - name: Injetar arquivos do app
+        script: |
+          cp -f ci/pubspec.yaml territorios_urbanos/pubspec.yaml
+          mkdir -p territorios_urbanos/lib
+          cp -f ci/lib_main.dart territorios_urbanos/lib/main.dart
+          mkdir -p territorios_urbanos/android/app/src/main
+          cp -f ci/AndroidManifest.xml territorios_urbanos/android/app/src/main/AndroidManifest.xml
+      - name: Resolver dependências
+        script: |
+          cd territorios_urbanos
+          flutter pub get
+      - name: Build APK release
+        script: |
+          cd territorios_urbanos
+          flutter build apk --release
+    artifacts:
+      - territorios_urbanos/build/app/outputs/flutter-apk/app-release.apk
