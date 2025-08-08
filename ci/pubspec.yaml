@@ -9,7 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # Versões compatíveis entre si
+  # versões compatíveis entre si
   flutter_map: ^6.1.0
   latlong2: ^0.8.1
   flutter_map_tile_caching: ^8.0.0
@@ -20,7 +20,7 @@ dependencies:
   uuid: ^4.4.0
   shared_preferences: ^2.2.3
   file_picker: ^8.0.3
-  http: ^1.2.2
+  http: ^0.13.5
   collection: ^1.18.0
   geojson_vi: ^2.0.4
   xml: ^6.5.0
