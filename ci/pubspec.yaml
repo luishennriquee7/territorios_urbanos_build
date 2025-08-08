@@ -10,10 +10,10 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # Mapas (compatíveis entre si)
-  flutter_map: ^6.1.0
+  # Mapas (todas compatíveis entre si)
+  flutter_map: ^8.2.1
+  flutter_map_tile_caching: ^10.1.1
   latlong2: ^0.9.1
-  flutter_map_tile_caching: ^10.0.0
 
   # Utilidades
   flutter_colorpicker: ^1.0.3
