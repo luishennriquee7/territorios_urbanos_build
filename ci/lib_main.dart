@@ -51,7 +51,9 @@ class Territory {
         'id': id,
         'name': name,
         'color': colorValue,
-        'points': points.map((p) => {'lat': p.latitude, 'lng': p.longitude}).toList(),
+        'points': points
+            .map((p) => {'lat': p.latitude, 'lng': p.longitude})
+            .toList(),
       };
 
   factory Territory.fromJson(Map<String, dynamic> j) => Territory(
@@ -59,7 +61,8 @@ class Territory {
         name: j['name'],
         colorValue: j['color'],
         points: (j['points'] as List)
-            .map((p) => LatLng((p['lat'] as num).toDouble(), (p['lng'] as num).toDouble()))
+            .map((p) =>
+                LatLng((p['lat'] as num).toDouble(), (p['lng'] as num).toDouble()))
             .toList(),
       );
 
@@ -79,7 +82,8 @@ class Territory {
       name: (f.properties?['name']?.toString() ?? 'Sem nome'),
       colorValue: int.tryParse(f.properties?['color']?.toString() ?? '') ??
           const Color(0xFF1E88E5).value,
-      points: ring.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList(),
+      points:
+          ring.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList(),
     );
   }
 }
@@ -95,15 +99,18 @@ enum EditMode { none, drawing, editing }
 class _MapHomePageState extends State<MapHomePage> {
   final uuid = const Uuid();
 
+  // Estado principal
   List<Territory> territories = [];
   String? selectedId;
   EditMode mode = EditMode.none;
   List<LatLng> draft = [];
 
+  // Mapa (OSM)
   final mapController = MapController();
   double zoom = 13;
-  LatLng center = LatLng(-2.5589, -44.0609); // MA por padrão
+  LatLng center = LatLng(-2.5589, -44.0609); // MA padrão
 
+  // Tile caching
   late final FMTCStore store;
 
   @override
@@ -137,7 +144,10 @@ class _MapHomePageState extends State<MapHomePage> {
     if (q.trim().isEmpty) return;
     final uri = Uri.parse(
         'https://nominatim.openstreetmap.org/search?format=json&q=${Uri.encodeComponent(q)}');
-    final r = await http.get(uri, headers: {'User-Agent': 'territorios_urbanos/1.0'});
+    final r = await http.get(
+      uri,
+      headers: {'User-Agent': 'territorios_urbanos/1.0'},
+    );
     if (r.statusCode == 200) {
       final list = jsonDecode(r.body) as List;
       if (list.isNotEmpty) {
@@ -174,17 +184,14 @@ class _MapHomePageState extends State<MapHomePage> {
       return;
     }
     final meta = await showDialog<_TerritoryMeta>(
-      context: context,
-      builder: (_) => const TerritoryMetaDialog(),
-    );
+        context: context, builder: (_) => const TerritoryMetaDialog());
     if (meta == null) return;
     setState(() {
       territories.add(Territory(
-        id: uuid.v4(),
-        name: meta.name,
-        colorValue: meta.color.value,
-        points: List.from(draft),
-      ));
+          id: uuid.v4(),
+          name: meta.name,
+          colorValue: meta.color.value,
+          points: List.from(draft)));
       mode = EditMode.none;
       draft = [];
     });
@@ -232,7 +239,38 @@ class _MapHomePageState extends State<MapHomePage> {
   void _toast(String m) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
-  // ===== GEO: HELPERS =====
+  // ===== IMPORT/EXPORT =====
+
+  // Exporta GeoJSON sem depender do construtor da lib (evita quebra de API)
+  Future<void> _exportGeoJSON() async {
+    final features = territories.map((t) => t.toGeoJSON().toMap()).toList();
+    final featureCollection = {
+      'type': 'FeatureCollection',
+      'features': features,
+    };
+
+    final dir = await getApplicationDocumentsDirectory();
+    final file = File('${dir.path}/territories.geojson');
+    await file.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(featureCollection),
+    );
+    _toast('GeoJSON exportado: ${file.path}');
+  }
+
+  Future<void> _importGeoJSON() async {
+    final res = await FilePicker.platform.pickFiles(
+        type: FileType.custom, allowedExtensions: ['geojson', 'json']);
+    if (res == null || res.files.isEmpty) return;
+    final path = res.files.single.path;
+    if (path == null) return;
+    final text = await File(path).readAsString();
+    final parsed = GeoJSONFeatureCollection.fromJSON(text);
+    final list = parsed.features.map(Territory.fromGeoJSON).toList();
+    setState(() => territories.addAll(list));
+    _saveTerritories();
+    _toast('GeoJSON importado: +${list.length} territórios');
+  }
+
   String _toKmlColor(int argb) {
     final a = (argb >> 24) & 0xFF;
     final r = (argb >> 16) & 0xFF;
@@ -243,45 +281,13 @@ class _MapHomePageState extends State<MapHomePage> {
     return '${hh(a)}${hh(b)}${hh(g)}${hh(r)}';
   }
 
-  // ===== IMPORT/EXPORT =====
-  Future<void> _exportGeoJSON() async {
-    final fc = GeoJSONFeatureCollection(
-      features: territories.map((t) => t.toGeoJSON()).toList(),
-    );
-    final dir = await getApplicationDocumentsDirectory();
-    final file = File('${dir.path}/territories.geojson');
-    await file.writeAsString(fc.toJSON());
-    _toast('GeoJSON exportado: ${file.path}');
-  }
-
-  Future<void> _importGeoJSON() async {
-    final res = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['geojson', 'json'],
-    );
-    if (res == null || res.files.isEmpty) return;
-    final path = res.files.single.path;
-    if (path == null) return;
-
-    final text = await File(path).readAsString();
-    final parsed = GeoJSONFeatureCollection.fromJSON(text);
-
-    // Em algumas versões, features pode ser List<dynamic> ou List<GeoJSONFeature?>
-    final feats = parsed.features.whereType<GeoJSONFeature>().toList();
-    final list = feats.map(Territory.fromGeoJSON).toList();
-
-    setState(() {
-      territories.addAll(list);
-    });
-    await _saveTerritories();
-    _toast('GeoJSON importado: +${list.length} territórios');
-  }
-
   Future<void> _exportKML() async {
     final builder = xml.XmlBuilder();
     builder.processing('xml', 'version="1.0" encoding="UTF-8"');
-    builder.element('kml', namespaces: {'': 'http://www.opengis.net/kml/2.2'}, nest: () {
+    builder.element('kml', namespaces: {'': 'http://www.opengis.net/kml/2.2'},
+        nest: () {
       builder.element('Document', nest: () {
+        // Estilos
         for (final t in territories) {
           builder.element('Style', attributes: {'id': 's_${t.id}'}, nest: () {
             builder.element('LineStyle', nest: () {
@@ -289,13 +295,14 @@ class _MapHomePageState extends State<MapHomePage> {
               builder.element('width', nest: '2');
             });
             builder.element('PolyStyle', nest: () {
-              final base = t.colorValue | 0x55000000;
+              final base = t.colorValue | 0x55000000; // aumenta alfa
               builder.element('color', nest: _toKmlColor(base));
               builder.element('fill', nest: '1');
               builder.element('outline', nest: '1');
             });
           });
         }
+        // Placemarks
         for (final t in territories) {
           builder.element('Placemark', nest: () {
             builder.element('name', nest: t.name);
@@ -307,8 +314,9 @@ class _MapHomePageState extends State<MapHomePage> {
                   if (coords.isNotEmpty && coords.first != coords.last) {
                     coords.add(coords.first);
                   }
-                  final coordStr =
-                      coords.map((p) => '${p.longitude},${p.latitude},0').join(' ');
+                  final coordStr = coords
+                      .map((p) => '${p.longitude},${p.latitude},0')
+                      .join(' ');
                   builder.element('coordinates', nest: coordStr);
                 });
               });
@@ -317,6 +325,7 @@ class _MapHomePageState extends State<MapHomePage> {
         }
       });
     });
+
     final dir = await getApplicationDocumentsDirectory();
     final file = File('${dir.path}/territories.kml');
     await file.writeAsString(builder.buildDocument().toXmlString(pretty: true));
@@ -326,7 +335,7 @@ class _MapHomePageState extends State<MapHomePage> {
   Future<void> _exportKMZ() async {
     final dir = await getApplicationDocumentsDirectory();
     final kmlPath = '${dir.path}/territories.kml';
-    await _exportKML();
+    await _exportKML(); // garante KML atualizado
     final encoder = ZipFileEncoder();
     final kmzPath = '${dir.path}/territories.kmz';
     encoder.create(kmzPath);
@@ -342,8 +351,7 @@ class _MapHomePageState extends State<MapHomePage> {
       if (coords.isNotEmpty && coords.first != coords.last) {
         coords.add(coords.first);
       }
-      final wkt =
-          'POLYGON((${coords.map((p) => '${p.longitude} ${p.latitude}').join(', ')}))';
+      final wkt = 'POLYGON((${coords.map((p) => '${p.longitude} ${p.latitude}').join(', ')}))';
       sb.writeln('-- ${t.name}');
       sb.writeln(wkt);
       sb.writeln();
@@ -377,8 +385,24 @@ class _MapHomePageState extends State<MapHomePage> {
 
   // ===== OFFLINE (cache tiles OSM) =====
   Future<void> _seedTilesForView() async {
-    // Temporário: API do FMTC v10 mudou; vamos reativar depois com Seeder/Jobs.
-    _toast('Baixar mapa offline desta área: em breve (atualizando API).');
+    final bounds = mapController.camera.visibleBounds;
+    final minZoom = 8;
+    final maxZoom = 16;
+    final task = store.manage.createTask(
+      name: 'seed_${DateTime.now().millisecondsSinceEpoch}',
+      minZoom: minZoom,
+      maxZoom: maxZoom,
+      bounds: FMTCLatLngBounds(
+        southWest: FMTCLatLng(
+            lat: bounds.southWest.latitude, lng: bounds.southWest.longitude),
+        northEast: FMTCLatLng(
+            lat: bounds.northEast.latitude, lng: bounds.northEast.longitude),
+      ),
+      urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      subdomains: const ['a', 'b', 'c'],
+    );
+    await task.start();
+    _toast('Mapa da área baixado (z $minZoom–$maxZoom).');
   }
 
   @override
@@ -429,10 +453,12 @@ class _MapHomePageState extends State<MapHomePage> {
       ),
     ];
 
-    final search = SizedBox(width: 320, child: _SearchBox(onSearch: _searchCity));
+    final search =
+        SizedBox(width: 320, child: _SearchBox(onSearch: _searchCity));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Territórios Urbanos'), actions: [...leftActions, search]),
+      appBar:
+          AppBar(title: const Text('Territórios Urbanos'), actions: [...leftActions, search]),
       body: Stack(children: [
         FlutterMap(
           mapController: mapController,
@@ -450,12 +476,13 @@ class _MapHomePageState extends State<MapHomePage> {
               urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
               subdomains: const ['a', 'b', 'c'],
               userAgentPackageName: 'com.example.territorios_urbanos',
-              tileProvider: store.getTileProvider(),
+              tileProvider: FMTC.instance('defaultStore').getTileProvider(),
             ),
             PolygonLayer(polygons: [
               ...territories.map((t) => Polygon(
                     points: t.points,
                     color: Color(t.colorValue).withOpacity(0.25),
+                    isFilled: true,
                     borderColor: Color(t.colorValue),
                     borderStrokeWidth: 2,
                   )),
@@ -476,7 +503,8 @@ class _MapHomePageState extends State<MapHomePage> {
                       name: t.name,
                       color: Color(t.colorValue),
                       onDelete: () {
-                        setState(() => territories.removeWhere((e) => e.id == t.id));
+                        setState(() =>
+                            territories.removeWhere((e) => e.id == t.id));
                         _saveTerritories();
                       },
                       onZoomTo: () {
@@ -513,11 +541,9 @@ class _MapHomePageState extends State<MapHomePage> {
             onFinish: _finishDraft,
             onApplyEdit: _applyEdit,
             onDeleteSelected: _deleteSelected,
-            onRecenter: () {
-              mapController.move(center, zoom);
-            },
+            onRecenter: () => mapController.move(center, zoom),
           ),
-        ),
+        )
       ]),
     );
   }
@@ -555,7 +581,8 @@ class _Controls extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             FilledButton.tonal(onPressed: onRecenter, child: const Text('Centralizar')),
-            if (mode == EditMode.none) FilledButton(onPressed: onStart, child: const Text('Desenhar')),
+            if (mode == EditMode.none)
+              FilledButton(onPressed: onStart, child: const Text('Desenhar')),
             if (mode == EditMode.drawing) ...[
               OutlinedButton(onPressed: onCancel, child: const Text('Cancelar')),
               FilledButton(onPressed: onFinish, child: const Text('Concluir')),
@@ -608,8 +635,8 @@ class _DragHandle extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () async {
-        final result =
-            await showDialog<LatLng>(context: context, builder: (_) => const _LatLngEditDialog());
+        final result = await showDialog<LatLng>(
+            context: context, builder: (_) => const _LatLngEditDialog());
         if (result != null) onDragEnd(result);
       },
       child: const Icon(Icons.circle, size: 18, color: Colors.orange),
@@ -633,8 +660,14 @@ class _LatLngEditDialogState extends State<_LatLngEditDialog> {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          TextField(controller: lat, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Latitude')),
-          TextField(controller: lon, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Longitude')),
+          TextField(
+              controller: lat,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Latitude')),
+          TextField(
+              controller: lon,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Longitude')),
         ],
       ),
       actions: [
@@ -647,7 +680,7 @@ class _LatLngEditDialogState extends State<_LatLngEditDialog> {
             Navigator.pop(context, LatLng(la, lo));
           },
           child: const Text('Aplicar'),
-        )
+        ),
       ],
     );
   }
@@ -681,7 +714,10 @@ class _TerritoryMetaDialogState extends State<TerritoryMetaDialog> {
             const SizedBox(height: 16),
             const Text('Cor'),
             const SizedBox(height: 8),
-            BlockPicker(pickerColor: currentColor, onColorChanged: (c) => setState(() => currentColor = c))
+            BlockPicker(
+              pickerColor: currentColor,
+              onColorChanged: (c) => setState(() => currentColor = c),
+            )
           ],
         ),
       ),
