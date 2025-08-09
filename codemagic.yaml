@@ -1,8 +1,7 @@
 workflows:
   android_release:
     name: Build APK (OSM)
-    # usa a máquina Linux gratuita do Codemagic
-    instance_type: linux
+    # sem instance_type para usar o padrão do plano
     max_build_duration: 60
 
     environment:
@@ -48,7 +47,7 @@ workflows:
       - name: Build APK release
         script: |
           cd $APP_DIR
-          # APK sem assinatura própria (debug/release genérica)
+          # APK sem assinatura própria (release genérica)
           flutter build apk --release --verbose
 
     artifacts:
@@ -57,5 +56,4 @@ workflows:
     publishing:
       email:
         recipients:
-          # troque para seu e-mail se quiser receber o APK
           - luishenriquee7@gmail.com
