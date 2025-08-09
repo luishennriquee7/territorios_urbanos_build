@@ -130,8 +130,6 @@ class _MapHomePageState extends State<MapHomePage> {
       'territories',
       jsonEncode(territories.map((t) => t.toJson()).toList()),
     );
-    // ignore: use_build_context_synchronously
-    _toast('Salvo');
   }
 
   // ===== BUSCA DE CIDADE (Nominatim) =====
@@ -268,7 +266,7 @@ class _MapHomePageState extends State<MapHomePage> {
     final text = await File(path).readAsString();
     final parsed = GeoJSONFeatureCollection.fromJSON(text);
 
-    // Em algumas combinações de versão, features pode ser List<dynamic> ou List<GeoJSONFeature?>
+    // Em algumas versões, features pode ser List<dynamic> ou List<GeoJSONFeature?>
     final feats = parsed.features.whereType<GeoJSONFeature>().toList();
     final list = feats.map(Territory.fromGeoJSON).toList();
 
@@ -610,7 +608,6 @@ class _DragHandle extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () async {
-        // Fallback simples para mover vértice via lat/lon
         final result =
             await showDialog<LatLng>(context: context, builder: (_) => const _LatLngEditDialog());
         if (result != null) onDragEnd(result);
