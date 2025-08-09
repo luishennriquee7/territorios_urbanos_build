@@ -1,13 +1,12 @@
 workflows:
   android_release:
     name: Build APK (OSM)
-    # usa máquina gratuita
+    # usa a máquina Linux gratuita do Codemagic
     instance_type: linux
     max_build_duration: 60
 
     environment:
       flutter: stable
-      # sem iOS/xcode; só Android
       vars:
         APP_DIR: app
 
@@ -23,7 +22,7 @@ workflows:
           dart --version
           java -version
 
-      # Como seu repositório não é um projeto Flutter "padrão",
+      # seu repositório não é um projeto Flutter padrão;
       # criamos um esqueleto e injetamos os arquivos da pasta ci/
       - name: Criar esqueleto Flutter
         script: |
@@ -32,7 +31,7 @@ workflows:
 
       - name: Injetar arquivos do app
         script: |
-          # pubspec e main.dart
+          # pubspec + código
           cp -f ci/pubspec.yaml $APP_DIR/pubspec.yaml
           mkdir -p $APP_DIR/lib
           cp -f ci/lib_main.dart $APP_DIR/lib/main.dart
@@ -49,7 +48,7 @@ workflows:
       - name: Build APK release
         script: |
           cd $APP_DIR
-          # gera app-release.apk (sem assinatura própria)
+          # APK sem assinatura própria (debug/release genérica)
           flutter build apk --release --verbose
 
     artifacts:
@@ -58,8 +57,5 @@ workflows:
     publishing:
       email:
         recipients:
-          # opcional: troque pelo seu e-mail para receber o APK por e-mail
-          - luishennriquee7@gmail.com
-        notify:
-          success: true
-          failure: true
+          # troque para seu e-mail se quiser receber o APK
+          - luishenriquee7@gmail.com
