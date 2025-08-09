@@ -190,13 +190,44 @@ class _MapHomePageState extends State<MapHomePage> {
 
   void _toast(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
-  // ===== EXPORTAÇÕES =====
+  // ===== GEO: HELPERS =====
+  String _toKmlColor(int argb){
+    final a = (argb >> 24) & 0xFF;
+    final r = (argb >> 16) & 0xFF;
+    final g = (argb >> 8) & 0xFF;
+    final b = (argb) & 0xFF;
+    String hh(int v)=> v.toRadixString(16).padLeft(2,'0');
+    // KML usa AABBGGRR
+    return '${hh(a)}${hh(b)}${hh(g)}${hh(r)}';
+  }
+
+  // ===== IMPORT/EXPORT =====
   Future<void> _exportGeoJSON() async {
     final fc = GeoJSONFeatureCollection(features: territories.map((t) => t.toGeoJSON()).toList());
     final dir = await getApplicationDocumentsDirectory();
     final file = File('${dir.path}/territories.geojson');
     await file.writeAsString(fc.toJSON());
     _toast('GeoJSON exportado: ${file.path}');
+  }
+
+  Future<void> _importGeoJSON() async {
+    final res = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['geojson', 'json'],
+    );
+    if (res == null || res.files.isEmpty) return;
+    final path = res.files.single.path;
+    if (path == null) return;
+
+    final text = await File(path).readAsString();
+    final parsed = GeoJSONFeatureCollection.fromJSON(text);
+    final list = parsed.features.map(Territory.fromGeoJSON).toList();
+
+    setState(() {
+      territories.addAll(list);
+    });
+    await _saveTerritories();
+    _toast('GeoJSON importado: +${list.length} territórios');
   }
 
   Future<void> _exportKML() async {
@@ -354,13 +385,12 @@ class _MapHomePageState extends State<MapHomePage> {
               urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
               subdomains: const ['a','b','c'],
               userAgentPackageName: 'com.example.territorios_urbanos',
-              tileProvider: FMTC.instance('defaultStore').getTileProvider(),
+              tileProvider: store.getTileProvider(),
             ),
             PolygonLayer(polygons: [
               ...territories.map((t) => Polygon(
                     points: t.points,
                     color: Color(t.colorValue).withOpacity(0.25),
-                    isFilled: true,
                     borderColor: Color(t.colorValue),
                     borderStrokeWidth: 2,
                   )),
