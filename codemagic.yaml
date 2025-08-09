@@ -1,28 +1,60 @@
 workflows:
   android_release:
     name: Build APK (OSM)
-    max_build_duration: 60
+    max_build_duration: 90
+    instance_type: linux # (se quiser mais rápido e tiver plano, use: linux_x2)
+
     environment:
       flutter: stable
+      vars:
+        PROJECT_DIR: territorios_urbanos
+
+    # Cache para acelerar MUITO os próximos builds
+    cache:
+      cache_paths:
+        - ~/.pub-cache
+        - ~/.gradle/caches
+        - ~/.gradle/wrapper
+        - $FCI_BUILD_DIR/$PROJECT_DIR/.dart_tool
+        - $FCI_BUILD_DIR/$PROJECT_DIR/build
+
     scripts:
-      - name: Criar esqueleto Flutter
+      - name: Versão do Flutter
         script: |
           flutter --version
-          flutter create territorios_urbanos
-      - name: Injetar arquivos do app
+
+      # Cria o app apenas se ainda não existir (evita refazer tudo em builds seguintes)
+      - name: Preparar projeto (esqueleto + copiar /ci)
         script: |
-          cp -f ci/pubspec.yaml territorios_urbanos/pubspec.yaml
-          mkdir -p territorios_urbanos/lib
-          cp -f ci/lib_main.dart territorios_urbanos/lib/main.dart
-          mkdir -p territorios_urbanos/android/app/src/main
-          cp -f ci/AndroidManifest.xml territorios_urbanos/android/app/src/main/AndroidManifest.xml
-      - name: Resolver dependências
+          if [ ! -d "$PROJECT_DIR" ]; then
+            flutter create $PROJECT_DIR
+          fi
+          rsync -a --delete ci/ $PROJECT_DIR/
+
+      # Otimizações do Gradle para compilar mais rápido/estável
+      - name: Otimizar Gradle
         script: |
-          cd territorios_urbanos
+          cd $PROJECT_DIR/android
+          # Garante arquivo
+          touch gradle.properties
+          # Flags de performance (sem duplicar linhas)
+          grep -qxF 'org.gradle.daemon=true' gradle.properties || echo 'org.gradle.daemon=true' >> gradle.properties
+          grep -qxF 'org.gradle.parallel=true' gradle.properties || echo 'org.gradle.parallel=true' >> gradle.properties
+          grep -qxF 'org.gradle.configureondemand=true' gradle.properties || echo 'org.gradle.configureondemand=true' >> gradle.properties
+          # Memória para Kotlin/Gradle (seguro p/ VM do Codemagic)
+          grep -qxF 'org.gradle.jvmargs=-Xmx4096m -Dkotlin.daemon.jvm.options="-Xmx2048m"' gradle.properties || \
+            echo 'org.gradle.jvmargs=-Xmx4096m -Dkotlin.daemon.jvm.options="-Xmx2048m"' >> gradle.properties
+
+      - name: Baixar dependências
+        script: |
+          cd $PROJECT_DIR
           flutter pub get
+
       - name: Build APK release
         script: |
-          cd territorios_urbanos
-          flutter build apk --release
+          cd $PROJECT_DIR
+          # --verbose ajuda a diagnosticar caso trave no assembleRelease
+          flutter build apk --release --no-tree-shake-icons --verbose
+
     artifacts:
-      - territorios_urbanos/build/app/outputs/flutter-apk/app-release.apk
+      - $PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk
