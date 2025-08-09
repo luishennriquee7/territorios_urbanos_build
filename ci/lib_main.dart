@@ -40,7 +40,12 @@ class Territory {
   int colorValue; // ARGB
   List<LatLng> points;
 
-  Territory({required this.id, required this.name, required this.colorValue, required this.points});
+  Territory({
+    required this.id,
+    required this.name,
+    required this.colorValue,
+    required this.points,
+  });
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -61,9 +66,7 @@ class Territory {
   GeoJSONFeature toGeoJSON() {
     final coords = points.map((p) => [p.longitude, p.latitude]).toList();
     return GeoJSONFeature(
-      geometry: GeoJSONPolygon(
-        coordinates: [coords],
-      ),
+      geometry: GeoJSONPolygon(coordinates: [coords]),
       properties: {'id': id, 'name': name, 'color': colorValue},
     );
   }
@@ -74,7 +77,8 @@ class Territory {
     return Territory(
       id: (f.properties?['id']?.toString() ?? const Uuid().v4()),
       name: (f.properties?['name']?.toString() ?? 'Sem nome'),
-      colorValue: int.tryParse(f.properties?['color']?.toString() ?? '') ?? const Color(0xFF1E88E5).value,
+      colorValue: int.tryParse(f.properties?['color']?.toString() ?? '') ??
+          const Color(0xFF1E88E5).value,
       points: ring.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList(),
     );
   }
@@ -122,20 +126,29 @@ class _MapHomePageState extends State<MapHomePage> {
 
   Future<void> _saveTerritories() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('territories', jsonEncode(territories.map((t) => t.toJson()).toList()));
+    await prefs.setString(
+      'territories',
+      jsonEncode(territories.map((t) => t.toJson()).toList()),
+    );
+    // ignore: use_build_context_synchronously
+    _toast('Salvo');
   }
 
   // ===== BUSCA DE CIDADE (Nominatim) =====
   Future<void> _searchCity(String q) async {
     if (q.trim().isEmpty) return;
-    final uri = Uri.parse('https://nominatim.openstreetmap.org/search?format=json&q='+Uri.encodeComponent(q));
+    final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/search?format=json&q=${Uri.encodeComponent(q)}');
     final r = await http.get(uri, headers: {'User-Agent': 'territorios_urbanos/1.0'});
     if (r.statusCode == 200) {
       final list = jsonDecode(r.body) as List;
       if (list.isNotEmpty) {
         final lat = double.parse(list[0]['lat']);
         final lon = double.parse(list[0]['lon']);
-        setState(() { center = LatLng(lat, lon); zoom = 12; });
+        setState(() {
+          center = LatLng(lat, lon);
+          zoom = 12;
+        });
         mapController.move(center, zoom);
       }
     }
@@ -143,20 +156,39 @@ class _MapHomePageState extends State<MapHomePage> {
 
   // ===== DESENHO/EDIÇÃO =====
   void _startDrawing() {
-    setState(() { mode = EditMode.drawing; draft = []; selectedId = null; });
+    setState(() {
+      mode = EditMode.drawing;
+      draft = [];
+      selectedId = null;
+    });
   }
 
   void _cancelDraft() {
-    setState(() { mode = EditMode.none; draft = []; });
+    setState(() {
+      mode = EditMode.none;
+      draft = [];
+    });
   }
 
   Future<void> _finishDraft() async {
-    if (draft.length < 3) { _toast('Mínimo de 3 pontos.'); return; }
-    final meta = await showDialog<_TerritoryMeta>(context: context, builder: (_) => const TerritoryMetaDialog());
+    if (draft.length < 3) {
+      _toast('Mínimo de 3 pontos.');
+      return;
+    }
+    final meta = await showDialog<_TerritoryMeta>(
+      context: context,
+      builder: (_) => const TerritoryMetaDialog(),
+    );
     if (meta == null) return;
     setState(() {
-      territories.add(Territory(id: uuid.v4(), name: meta.name, colorValue: meta.color.value, points: List.from(draft)));
-      mode = EditMode.none; draft = [];
+      territories.add(Territory(
+        id: uuid.v4(),
+        name: meta.name,
+        colorValue: meta.color.value,
+        points: List.from(draft),
+      ));
+      mode = EditMode.none;
+      draft = [];
     });
     _saveTerritories();
   }
@@ -164,7 +196,11 @@ class _MapHomePageState extends State<MapHomePage> {
   void _selectForEdit(String id) {
     final t = territories.firstWhereOrNull((e) => e.id == id);
     if (t == null) return;
-    setState(() { selectedId = id; mode = EditMode.editing; draft = List.from(t.points); });
+    setState(() {
+      selectedId = id;
+      mode = EditMode.editing;
+      draft = List.from(t.points);
+    });
   }
 
   void _applyEdit() {
@@ -177,33 +213,43 @@ class _MapHomePageState extends State<MapHomePage> {
         colorValue: territories[idx].colorValue,
         points: List.from(draft),
       );
-      mode = EditMode.none; selectedId = null; draft = [];
+      mode = EditMode.none;
+      selectedId = null;
+      draft = [];
     });
     _saveTerritories();
   }
 
   void _deleteSelected() {
     if (selectedId == null) return;
-    setState(() { territories.removeWhere((t) => t.id == selectedId); mode = EditMode.none; selectedId = null; draft = []; });
+    setState(() {
+      territories.removeWhere((t) => t.id == selectedId);
+      mode = EditMode.none;
+      selectedId = null;
+      draft = [];
+    });
     _saveTerritories();
   }
 
-  void _toast(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+  void _toast(String m) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
   // ===== GEO: HELPERS =====
-  String _toKmlColor(int argb){
+  String _toKmlColor(int argb) {
     final a = (argb >> 24) & 0xFF;
     final r = (argb >> 16) & 0xFF;
     final g = (argb >> 8) & 0xFF;
     final b = (argb) & 0xFF;
-    String hh(int v)=> v.toRadixString(16).padLeft(2,'0');
+    String hh(int v) => v.toRadixString(16).padLeft(2, '0');
     // KML usa AABBGGRR
     return '${hh(a)}${hh(b)}${hh(g)}${hh(r)}';
   }
 
   // ===== IMPORT/EXPORT =====
   Future<void> _exportGeoJSON() async {
-    final fc = GeoJSONFeatureCollection(features: territories.map((t) => t.toGeoJSON()).toList());
+    final fc = GeoJSONFeatureCollection(
+      features: territories.map((t) => t.toGeoJSON()).toList(),
+    );
     final dir = await getApplicationDocumentsDirectory();
     final file = File('${dir.path}/territories.geojson');
     await file.writeAsString(fc.toJSON());
@@ -221,7 +267,10 @@ class _MapHomePageState extends State<MapHomePage> {
 
     final text = await File(path).readAsString();
     final parsed = GeoJSONFeatureCollection.fromJSON(text);
-    final list = parsed.features.map(Territory.fromGeoJSON).toList();
+
+    // Em algumas combinações de versão, features pode ser List<dynamic> ou List<GeoJSONFeature?>
+    final feats = parsed.features.whereType<GeoJSONFeature>().toList();
+    final list = feats.map(Territory.fromGeoJSON).toList();
 
     setState(() {
       territories.addAll(list);
@@ -232,29 +281,36 @@ class _MapHomePageState extends State<MapHomePage> {
 
   Future<void> _exportKML() async {
     final builder = xml.XmlBuilder();
-    builder.processing('xml','version="1.0" encoding="UTF-8"');
-    builder.element('kml', namespaces:{'':'http://www.opengis.net/kml/2.2'}, nest: (){
-      builder.element('Document', nest: (){
-        for(final t in territories){
-          builder.element('Style', attributes:{'id': 's_${t.id}'}, nest:(){
-            builder.element('LineStyle', nest:(){ builder.element('color', nest: _toKmlColor(t.colorValue)); builder.element('width', nest: '2'); });
-            builder.element('PolyStyle', nest:(){
+    builder.processing('xml', 'version="1.0" encoding="UTF-8"');
+    builder.element('kml', namespaces: {'': 'http://www.opengis.net/kml/2.2'}, nest: () {
+      builder.element('Document', nest: () {
+        for (final t in territories) {
+          builder.element('Style', attributes: {'id': 's_${t.id}'}, nest: () {
+            builder.element('LineStyle', nest: () {
+              builder.element('color', nest: _toKmlColor(t.colorValue));
+              builder.element('width', nest: '2');
+            });
+            builder.element('PolyStyle', nest: () {
               final base = t.colorValue | 0x55000000;
               builder.element('color', nest: _toKmlColor(base));
-              builder.element('fill', nest: '1'); builder.element('outline', nest: '1');
+              builder.element('fill', nest: '1');
+              builder.element('outline', nest: '1');
             });
           });
         }
-        for(final t in territories){
-          builder.element('Placemark', nest: (){
+        for (final t in territories) {
+          builder.element('Placemark', nest: () {
             builder.element('name', nest: t.name);
             builder.element('styleUrl', nest: '#s_${t.id}');
-            builder.element('Polygon', nest: (){
-              builder.element('outerBoundaryIs', nest: (){
-                builder.element('LinearRing', nest: (){
+            builder.element('Polygon', nest: () {
+              builder.element('outerBoundaryIs', nest: () {
+                builder.element('LinearRing', nest: () {
                   final coords = List<LatLng>.from(t.points);
-                  if(coords.isNotEmpty && coords.first != coords.last){ coords.add(coords.first); }
-                  final coordStr = coords.map((p)=> '${p.longitude},${p.latitude},0').join(' ');
+                  if (coords.isNotEmpty && coords.first != coords.last) {
+                    coords.add(coords.first);
+                  }
+                  final coordStr =
+                      coords.map((p) => '${p.longitude},${p.latitude},0').join(' ');
                   builder.element('coordinates', nest: coordStr);
                 });
               });
@@ -283,12 +339,16 @@ class _MapHomePageState extends State<MapHomePage> {
 
   Future<void> _exportWKT() async {
     final sb = StringBuffer();
-    for(final t in territories){
+    for (final t in territories) {
       final coords = List<LatLng>.from(t.points);
-      if(coords.isNotEmpty && coords.first != coords.last){ coords.add(coords.first); }
-      final wkt = 'POLYGON((${coords.map((p)=> '${p.longitude} ${p.latitude}').join(', ')}))';
+      if (coords.isNotEmpty && coords.first != coords.last) {
+        coords.add(coords.first);
+      }
+      final wkt =
+          'POLYGON((${coords.map((p) => '${p.longitude} ${p.latitude}').join(', ')}))';
       sb.writeln('-- ${t.name}');
-      sb.writeln(wkt); sb.writeln();
+      sb.writeln(wkt);
+      sb.writeln();
     }
     final dir = await getApplicationDocumentsDirectory();
     final file = File('${dir.path}/territories.wkt');
@@ -298,12 +358,14 @@ class _MapHomePageState extends State<MapHomePage> {
 
   Future<void> _exportGPX() async {
     final gpx = Gpx();
-    for(final t in territories){
+    for (final t in territories) {
       final trk = Trk(name: t.name);
       final seg = Trkseg();
       final pts = List<LatLng>.from(t.points);
-      if(pts.isNotEmpty && pts.first != pts.last){ pts.add(pts.first); }
-      for(final p in pts){
+      if (pts.isNotEmpty && pts.first != pts.last) {
+        pts.add(pts.first);
+      }
+      for (final p in pts) {
         seg.trkpts.add(Wpt(lat: p.latitude, lon: p.longitude));
       }
       trk.trksegs.add(seg);
@@ -317,21 +379,8 @@ class _MapHomePageState extends State<MapHomePage> {
 
   // ===== OFFLINE (cache tiles OSM) =====
   Future<void> _seedTilesForView() async {
-    final bounds = mapController.camera.visibleBounds;
-    final minZoom = 8; final maxZoom = 16;
-    final task = store.manage.createTask(
-      name: 'seed_${DateTime.now().millisecondsSinceEpoch}',
-      minZoom: minZoom,
-      maxZoom: maxZoom,
-      bounds: FMTCLatLngBounds(
-        southWest: FMTCLatLng(lat: bounds.southWest.latitude, lng: bounds.southWest.longitude),
-        northEast: FMTCLatLng(lat: bounds.northEast.latitude, lng: bounds.northEast.longitude),
-      ),
-      urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      subdomains: const ['a','b','c'],
-    );
-    await task.start();
-    _toast('Mapa da área baixado (z $minZoom–$maxZoom).');
+    // Temporário: API do FMTC v10 mudou; vamos reativar depois com Seeder/Jobs.
+    _toast('Baixar mapa offline desta área: em breve (atualizando API).');
   }
 
   @override
@@ -339,31 +388,45 @@ class _MapHomePageState extends State<MapHomePage> {
     final leftActions = <Widget>[
       PopupMenuButton<String>(
         tooltip: 'Importar/Exportar',
-        onSelected: (v){
-          switch(v){
-            case 'import_geojson': _importGeoJSON(); break;
-            case 'export_geojson': _exportGeoJSON(); break;
-            case 'export_kml': _exportKML(); break;
-            case 'export_kmz': _exportKMZ(); break;
-            case 'export_wkt': _exportWKT(); break;
-            case 'export_gpx': _exportGPX(); break;
+        onSelected: (v) {
+          switch (v) {
+            case 'import_geojson':
+              _importGeoJSON();
+              break;
+            case 'export_geojson':
+              _exportGeoJSON();
+              break;
+            case 'export_kml':
+              _exportKML();
+              break;
+            case 'export_kmz':
+              _exportKMZ();
+              break;
+            case 'export_wkt':
+              _exportWKT();
+              break;
+            case 'export_gpx':
+              _exportGPX();
+              break;
           }
         },
         itemBuilder: (_) => const [
-          PopupMenuItem(value:'import_geojson', child: Text('Importar GeoJSON…')),
+          PopupMenuItem(value: 'import_geojson', child: Text('Importar GeoJSON…')),
           PopupMenuDivider(),
-          PopupMenuItem(value:'export_geojson', child: Text('Exportar GeoJSON')),
-          PopupMenuItem(value:'export_kml', child: Text('Exportar KML')),
-          PopupMenuItem(value:'export_kmz', child: Text('Exportar KMZ (compactado)')),
-          PopupMenuItem(value:'export_wkt', child: Text('Exportar WKT')),
-          PopupMenuItem(value:'export_gpx', child: Text('Exportar GPX')),
+          PopupMenuItem(value: 'export_geojson', child: Text('Exportar GeoJSON')),
+          PopupMenuItem(value: 'export_kml', child: Text('Exportar KML')),
+          PopupMenuItem(value: 'export_kmz', child: Text('Exportar KMZ (compactado)')),
+          PopupMenuItem(value: 'export_wkt', child: Text('Exportar WKT')),
+          PopupMenuItem(value: 'export_gpx', child: Text('Exportar GPX')),
         ],
       ),
       PopupMenuButton<String>(
         tooltip: 'Mapa Offline',
-        onSelected: (v){ if(v=='seed') _seedTilesForView(); },
+        onSelected: (v) {
+          if (v == 'seed') _seedTilesForView();
+        },
         itemBuilder: (_) => const [
-          PopupMenuItem(value:'seed', child: Text('Baixar mapa desta área (offline)')),
+          PopupMenuItem(value: 'seed', child: Text('Baixar mapa desta área (offline)')),
         ],
       ),
     ];
@@ -378,12 +441,16 @@ class _MapHomePageState extends State<MapHomePage> {
           options: MapOptions(
             initialCenter: center,
             initialZoom: zoom,
-            onTap: (tapPos, latlng) { if (mode == EditMode.drawing) { setState(() => draft.add(latlng)); } },
+            onTap: (tapPos, latlng) {
+              if (mode == EditMode.drawing) {
+                setState(() => draft.add(latlng));
+              }
+            },
           ),
           children: [
             TileLayer(
               urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-              subdomains: const ['a','b','c'],
+              subdomains: const ['a', 'b', 'c'],
               userAgentPackageName: 'com.example.territorios_urbanos',
               tileProvider: store.getTileProvider(),
             ),
@@ -395,30 +462,52 @@ class _MapHomePageState extends State<MapHomePage> {
                     borderStrokeWidth: 2,
                   )),
               if (draft.isNotEmpty)
-                Polygon(points: draft, color: Colors.orange.withOpacity(0.2), borderColor: Colors.orange, borderStrokeWidth: 2),
+                Polygon(
+                  points: draft,
+                  color: Colors.orange.withOpacity(0.2),
+                  borderColor: Colors.orange,
+                  borderStrokeWidth: 2,
+                ),
             ]),
             MarkerLayer(markers: [
               ...territories.map((t) => Marker(
                     point: _centroid(t.points),
-                    width: 190, height: 48,
+                    width: 190,
+                    height: 48,
                     child: _TerritoryChip(
                       name: t.name,
                       color: Color(t.colorValue),
-                      onDelete: (){ setState(()=> territories.removeWhere((e)=> e.id==t.id)); _saveTerritories(); },
-                      onZoomTo: (){ mapController.move(_centroid(t.points), 16); },
-                      onEdit: ()=> _selectForEdit(t.id),
+                      onDelete: () {
+                        setState(() => territories.removeWhere((e) => e.id == t.id));
+                        _saveTerritories();
+                      },
+                      onZoomTo: () {
+                        mapController.move(_centroid(t.points), 16);
+                      },
+                      onEdit: () => _selectForEdit(t.id),
                     ),
                   )),
               if (mode == EditMode.editing)
-                ...List.generate(draft.length, (i) => Marker(
-                      point: draft[i], width: 24, height: 24,
-                      child: _DragHandle(onDragEnd: (newLatLng){ setState(()=> draft[i] = newLatLng); }),
-                    )),
+                ...List.generate(
+                  draft.length,
+                  (i) => Marker(
+                    point: draft[i],
+                    width: 24,
+                    height: 24,
+                    child: _DragHandle(
+                      onDragEnd: (newLatLng) {
+                        setState(() => draft[i] = newLatLng);
+                      },
+                    ),
+                  ),
+                ),
             ]),
           ],
         ),
         Positioned(
-          bottom: 12, left: 12, right: 12,
+          bottom: 12,
+          left: 12,
+          right: 12,
           child: _Controls(
             mode: mode,
             onStart: _startDrawing,
@@ -426,23 +515,38 @@ class _MapHomePageState extends State<MapHomePage> {
             onFinish: _finishDraft,
             onApplyEdit: _applyEdit,
             onDeleteSelected: _deleteSelected,
-            onRecenter: () { mapController.move(center, zoom); },
+            onRecenter: () {
+              mapController.move(center, zoom);
+            },
           ),
-        )
+        ),
       ]),
     );
   }
 
   LatLng _centroid(List<LatLng> pts) {
-    double x = 0, y = 0; for (final p in pts) { x += p.latitude; y += p.longitude; }
-    return LatLng(x/pts.length, y/pts.length);
+    double x = 0, y = 0;
+    for (final p in pts) {
+      x += p.latitude;
+      y += p.longitude;
+    }
+    return LatLng(x / pts.length, y / pts.length);
   }
 }
 
 class _Controls extends StatelessWidget {
   final EditMode mode;
   final VoidCallback onStart, onCancel, onFinish, onApplyEdit, onDeleteSelected, onRecenter;
-  const _Controls({super.key, required this.mode, required this.onStart, required this.onCancel, required this.onFinish, required this.onApplyEdit, required this.onDeleteSelected, required this.onRecenter});
+  const _Controls({
+    super.key,
+    required this.mode,
+    required this.onStart,
+    required this.onCancel,
+    required this.onFinish,
+    required this.onApplyEdit,
+    required this.onDeleteSelected,
+    required this.onRecenter,
+  });
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -453,8 +557,7 @@ class _Controls extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             FilledButton.tonal(onPressed: onRecenter, child: const Text('Centralizar')),
-            if (mode == EditMode.none)
-              FilledButton(onPressed: onStart, child: const Text('Desenhar')),
+            if (mode == EditMode.none) FilledButton(onPressed: onStart, child: const Text('Desenhar')),
             if (mode == EditMode.drawing) ...[
               OutlinedButton(onPressed: onCancel, child: const Text('Cancelar')),
               FilledButton(onPressed: onFinish, child: const Text('Concluir')),
@@ -472,8 +575,19 @@ class _Controls extends StatelessWidget {
 }
 
 class _TerritoryChip extends StatelessWidget {
-  final String name; final Color color; final VoidCallback onDelete; final VoidCallback onZoomTo; final VoidCallback onEdit;
-  const _TerritoryChip({super.key, required this.name, required this.color, required this.onDelete, required this.onZoomTo, required this.onEdit});
+  final String name;
+  final Color color;
+  final VoidCallback onDelete;
+  final VoidCallback onZoomTo;
+  final VoidCallback onEdit;
+  const _TerritoryChip({
+    super.key,
+    required this.name,
+    required this.color,
+    required this.onDelete,
+    required this.onZoomTo,
+    required this.onEdit,
+  });
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -496,7 +610,9 @@ class _DragHandle extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () async {
-        final result = await showDialog<LatLng>(context: context, builder: (_) => const _LatLngEditDialog());
+        // Fallback simples para mover vértice via lat/lon
+        final result =
+            await showDialog<LatLng>(context: context, builder: (_) => const _LatLngEditDialog());
         if (result != null) onDragEnd(result);
       },
       child: const Icon(Icons.circle, size: 18, color: Colors.orange),
@@ -509,6 +625,7 @@ class _LatLngEditDialog extends StatefulWidget {
   @override
   State<_LatLngEditDialog> createState() => _LatLngEditDialogState();
 }
+
 class _LatLngEditDialogState extends State<_LatLngEditDialog> {
   final lat = TextEditingController();
   final lon = TextEditingController();
@@ -516,21 +633,41 @@ class _LatLngEditDialogState extends State<_LatLngEditDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Mover vértice'),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: lat, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Latitude')),
-        TextField(controller: lon, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Longitude')),
-      ]),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(controller: lat, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Latitude')),
+          TextField(controller: lon, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Longitude')),
+        ],
+      ),
       actions: [
-        TextButton(onPressed: ()=> Navigator.pop(context), child: const Text('Cancelar')),
-        FilledButton(onPressed: (){ final la = double.tryParse(lat.text); final lo = double.tryParse(lon.text); if (la==null||lo==null) return; Navigator.pop(context, LatLng(la,lo)); }, child: const Text('Aplicar'))
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+        FilledButton(
+          onPressed: () {
+            final la = double.tryParse(lat.text);
+            final lo = double.tryParse(lon.text);
+            if (la == null || lo == null) return;
+            Navigator.pop(context, LatLng(la, lo));
+          },
+          child: const Text('Aplicar'),
+        )
       ],
     );
   }
 }
 
-class _TerritoryMeta { final String name; final Color color; const _TerritoryMeta(this.name, this.color); }
+class _TerritoryMeta {
+  final String name;
+  final Color color;
+  const _TerritoryMeta(this.name, this.color);
+}
 
-class TerritoryMetaDialog extends StatefulWidget { const TerritoryMetaDialog({super.key}); @override State<TerritoryMetaDialog> createState() => _TerritoryMetaDialogState(); }
+class TerritoryMetaDialog extends StatefulWidget {
+  const TerritoryMetaDialog({super.key});
+  @override
+  State<TerritoryMetaDialog> createState() => _TerritoryMetaDialogState();
+}
+
 class _TerritoryMetaDialogState extends State<TerritoryMetaDialog> {
   final TextEditingController nameCtrl = TextEditingController();
   Color currentColor = const Color(0xFF1E88E5);
@@ -539,28 +676,49 @@ class _TerritoryMetaDialogState extends State<TerritoryMetaDialog> {
     return AlertDialog(
       title: const Text('Novo território'),
       content: SingleChildScrollView(
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Nome')),
-          const SizedBox(height: 16), const Text('Cor'), const SizedBox(height: 8),
-          BlockPicker(pickerColor: currentColor, onColorChanged: (c)=> setState(()=> currentColor = c))
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Nome')),
+            const SizedBox(height: 16),
+            const Text('Cor'),
+            const SizedBox(height: 8),
+            BlockPicker(pickerColor: currentColor, onColorChanged: (c) => setState(() => currentColor = c))
+          ],
+        ),
       ),
       actions: [
-        TextButton(onPressed: ()=> Navigator.pop(context), child: const Text('Cancelar')),
-        FilledButton(onPressed: (){ if(nameCtrl.text.trim().isEmpty) return; Navigator.pop(context, _TerritoryMeta(nameCtrl.text.trim(), currentColor)); }, child: const Text('Salvar')),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+        FilledButton(
+          onPressed: () {
+            if (nameCtrl.text.trim().isEmpty) return;
+            Navigator.pop(context, _TerritoryMeta(nameCtrl.text.trim(), currentColor));
+          },
+          child: const Text('Salvar'),
+        ),
       ],
     );
   }
 }
 
-class _SearchBox extends StatefulWidget { final ValueChanged<String> onSearch; const _SearchBox({super.key, required this.onSearch}); @override State<_SearchBox> createState() => _SearchBoxState(); }
+class _SearchBox extends StatefulWidget {
+  final ValueChanged<String> onSearch;
+  const _SearchBox({super.key, required this.onSearch});
+  @override
+  State<_SearchBox> createState() => _SearchBoxState();
+}
+
 class _SearchBoxState extends State<_SearchBox> {
   final ctrl = TextEditingController();
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: ctrl,
-      decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Buscar cidade/bairro (ex: São Luís, MA)'),
+      decoration: const InputDecoration(
+        prefixIcon: Icon(Icons.search),
+        hintText: 'Buscar cidade/bairro (ex: São Luís, MA)',
+      ),
       onSubmitted: widget.onSearch,
       textInputAction: TextInputAction.search,
     );
