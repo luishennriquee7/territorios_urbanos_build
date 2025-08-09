@@ -1,60 +1,65 @@
 workflows:
   android_release:
     name: Build APK (OSM)
-    max_build_duration: 90
-    instance_type: linux # (se quiser mais rápido e tiver plano, use: linux_x2)
+    # usa máquina gratuita
+    instance_type: linux
+    max_build_duration: 60
 
     environment:
       flutter: stable
+      # sem iOS/xcode; só Android
       vars:
-        PROJECT_DIR: territorios_urbanos
+        APP_DIR: app
 
-    # Cache para acelerar MUITO os próximos builds
     cache:
       cache_paths:
         - ~/.pub-cache
-        - ~/.gradle/caches
-        - ~/.gradle/wrapper
-        - $FCI_BUILD_DIR/$PROJECT_DIR/.dart_tool
-        - $FCI_BUILD_DIR/$PROJECT_DIR/build
+        - $APP_DIR/build
 
     scripts:
-      - name: Versão do Flutter
+      - name: Versões das ferramentas
         script: |
           flutter --version
+          dart --version
+          java -version
 
-      # Cria o app apenas se ainda não existir (evita refazer tudo em builds seguintes)
-      - name: Preparar projeto (esqueleto + copiar /ci)
+      # Como seu repositório não é um projeto Flutter "padrão",
+      # criamos um esqueleto e injetamos os arquivos da pasta ci/
+      - name: Criar esqueleto Flutter
         script: |
-          if [ ! -d "$PROJECT_DIR" ]; then
-            flutter create $PROJECT_DIR
-          fi
-          rsync -a --delete ci/ $PROJECT_DIR/
+          rm -rf $APP_DIR
+          flutter create $APP_DIR
 
-      # Otimizações do Gradle para compilar mais rápido/estável
-      - name: Otimizar Gradle
+      - name: Injetar arquivos do app
         script: |
-          cd $PROJECT_DIR/android
-          # Garante arquivo
-          touch gradle.properties
-          # Flags de performance (sem duplicar linhas)
-          grep -qxF 'org.gradle.daemon=true' gradle.properties || echo 'org.gradle.daemon=true' >> gradle.properties
-          grep -qxF 'org.gradle.parallel=true' gradle.properties || echo 'org.gradle.parallel=true' >> gradle.properties
-          grep -qxF 'org.gradle.configureondemand=true' gradle.properties || echo 'org.gradle.configureondemand=true' >> gradle.properties
-          # Memória para Kotlin/Gradle (seguro p/ VM do Codemagic)
-          grep -qxF 'org.gradle.jvmargs=-Xmx4096m -Dkotlin.daemon.jvm.options="-Xmx2048m"' gradle.properties || \
-            echo 'org.gradle.jvmargs=-Xmx4096m -Dkotlin.daemon.jvm.options="-Xmx2048m"' >> gradle.properties
+          # pubspec e main.dart
+          cp -f ci/pubspec.yaml $APP_DIR/pubspec.yaml
+          mkdir -p $APP_DIR/lib
+          cp -f ci/lib_main.dart $APP_DIR/lib/main.dart
 
-      - name: Baixar dependências
+          # Manifest Android
+          mkdir -p $APP_DIR/android/app/src/main
+          cp -f ci/AndroidManifest.xml $APP_DIR/android/app/src/main/AndroidManifest.xml
+
+      - name: Instalar dependências
         script: |
-          cd $PROJECT_DIR
+          cd $APP_DIR
           flutter pub get
 
       - name: Build APK release
         script: |
-          cd $PROJECT_DIR
-          # --verbose ajuda a diagnosticar caso trave no assembleRelease
-          flutter build apk --release --no-tree-shake-icons --verbose
+          cd $APP_DIR
+          # gera app-release.apk (sem assinatura própria)
+          flutter build apk --release --verbose
 
     artifacts:
-      - $PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk
+      - $APP_DIR/build/app/outputs/flutter-apk/app-release.apk
+
+    publishing:
+      email:
+        recipients:
+          # opcional: troque pelo seu e-mail para receber o APK por e-mail
+          - luishennriquee7@gmail.com
+        notify:
+          success: true
+          failure: true
