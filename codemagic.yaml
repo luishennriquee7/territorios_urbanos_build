@@ -1,8 +1,9 @@
 workflows:
   android_release:
     name: Build APK (OSM)
-    # usa a máquina Linux gratuita
-    instance_type: linux
+    # deixa o Codemagic escolher uma instância compatível com o seu plano
+    # (não usar "instance_type" aqui)
+
     max_build_duration: 60
 
     environment:
@@ -22,20 +23,23 @@ workflows:
           dart --version
           java -version
 
-      # cria um app Flutter "vazio" num diretório temporário
+      # seu repositório não é um projeto Flutter padrão;
+      # criamos um esqueleto e injetamos os arquivos da pasta ci/
       - name: Criar esqueleto Flutter
         script: |
           rm -rf $APP_DIR
           flutter create $APP_DIR
 
-      # injeta seus arquivos do repositório (apenas estes dois)
       - name: Injetar arquivos do app
         script: |
+          # pubspec + código
           cp -f ci/pubspec.yaml $APP_DIR/pubspec.yaml
           mkdir -p $APP_DIR/lib
           cp -f ci/lib_main.dart $APP_DIR/lib/main.dart
-          # Observação: NÃO copiamos nada de android/.
-          # Usamos tudo que o "flutter create" gerou.
+
+          # Manifest Android
+          mkdir -p $APP_DIR/android/app/src/main
+          cp -f ci/AndroidManifest.xml $APP_DIR/android/app/src/main/AndroidManifest.xml
 
       - name: Instalar dependências
         script: |
@@ -45,6 +49,7 @@ workflows:
       - name: Build APK release
         script: |
           cd $APP_DIR
+          # APK sem assinatura própria (genérico)
           flutter build apk --release --verbose
 
     artifacts:
